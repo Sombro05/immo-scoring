@@ -51,18 +51,24 @@ function getSiteName() {
 }
 
 function extraireCartes() {
-  const site = getSiteName();
-  if (!site) return [];
+  const url = window.location.href;
+  const isLocation = url.includes("category=10");
+  const isVente = url.includes("category=9");
 
-  const sel = SELECTEURS[site];
+  if (!url.includes("leboncoin.fr/recherche") || (!isLocation && !isVente)) {
+    return [];
+  }
+
+  const sel = '[data-qa-id="aditem_container"], [class*="styles_adCard"]';
   const toutes = [...document.querySelectorAll(sel)];
-
   return toutes.filter(carte => {
     const parent = carte.parentElement?.closest(sel);
     return parent === null;
   });
 }
-
+function estModeLocation() {
+  return window.location.href.includes("category=10");
+}
 function extraireInfoCarte(carte) {
   const texte = carte.innerText || "";
 
@@ -142,7 +148,8 @@ function creerBarreFiltrage() {
   const url = window.location.href;
   const estListeImmo = (
     (url.includes("leboncoin.fr/recherche") && url.includes("category=9")) ||
-    (url.includes("seloger.com") && !url.includes("/annonce/"))
+    (url.includes("seloger.com") && !url.includes("/annonce/")) ||
+    (url.includes("leboncoin.fr/recherche") && url.includes("category=10"))
   );
   if (!estListeImmo) return;
 
@@ -231,14 +238,25 @@ function appliquerFiltre(scoreMin) {
 
   observer.observe(document.body, { childList: true, subtree: true });
 }
-
+async function scorerLoyer(ville, surface, loyer, typeBien) {
+  try {
+    const params = new URLSearchParams({
+      ville, surface, loyer, type_bien: typeBien
+    });
+    const res = await fetch(`${API_URL}/score_loyer?${params}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { return null; }
+}
 async function analyserToutesLesCartes() {
   const cartes = extraireCartes();
   if (cartes.length === 0) return;
 
   // N'afficher la barre que si on a des annonces
   creerBarreFiltrage();
-
+const result = estModeLocation()
+      ? await scorerLoyer(info.ville, info.surface, info.prix, info.typeBien)
+      : await scorerAnnonce(info.ville, info.surface, info.prix, info.typeBien, info.dpe);
   for (const carte of cartes) {
     if (carte.querySelector(".habitatscore-badge")) continue;
     const info = extraireInfoCarte(carte);

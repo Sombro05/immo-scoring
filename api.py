@@ -87,7 +87,41 @@ async def calculer_score(
         "ville_trouvee":  row["nom_commune"],
         "dept":           row["dept_affiche"],
     }
+@app.get("/score_loyer")
+async def calculer_score_loyer(
+    request: Request,
+    ville:     str,
+    surface:   float,
+    loyer:     float,
+    type_bien: str = "Appartement",
+):
+    from scoring import scorer_loyer
+    row = trouver_ville(ville, type_bien)
+    if row is None:
+        return {"erreur": f"Ville '{ville}' introuvable"}
 
+    loyer_m2_marche = float(row["loyer_m2_estime"])
+    res = scorer_loyer(loyer, surface, loyer_m2_marche)
+
+    user_agent = request.headers.get("user-agent", "")
+    track(
+        type="score_loyer",
+        source="extension",
+        ville=row["nom_commune"],
+        type_bien=type_bien,
+        score=res["score_pct"],
+        user_agent=user_agent[:200] if user_agent else None,
+    )
+
+    return {
+        "score":           res["score_pct"],
+        "ecart":           res["ecart"],
+        "loyer_m2_bien":   res["loyer_m2_bien"],
+        "loyer_m2_marche": res["loyer_m2_marche"],
+        "ville_trouvee":   row["nom_commune"],
+        "dept":            row["dept_affiche"],
+        "type": "loyer",
+    }
 from fastapi import Response
 
 @app.api_route("/health", methods=["GET", "HEAD"])

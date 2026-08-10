@@ -95,3 +95,18 @@ def scorer(
         "rdt_net":               round(rdt_net,  2) if rdt_net  else None,
         "rdt_neutre":            round(rdt_neutre, 2) if rdt_neutre else None,
     }
+def scorer_loyer(loyer_mensuel, surface, loyer_m2_marche):
+    """
+    Score pour une annonce de location.
+    Ancre : loyer_m2_bien == loyer_m2_marche → 50%
+    En dessous du marché = bonne affaire pour le locataire → score > 50
+    """
+    loyer_m2_bien = loyer_mensuel / surface
+    ecart = (loyer_m2_bien - loyer_m2_marche) / loyer_m2_marche * 100
+    score = 50 - ecart
+    return {
+        "score_pct":      max(0, min(100, round(score))),
+        "loyer_m2_bien":  round(loyer_m2_bien, 2),
+        "loyer_m2_marche": round(loyer_m2_marche, 2),
+        "ecart":          round(ecart, 1),
+    }
