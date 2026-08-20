@@ -1,18 +1,5 @@
 const API_URL = "https://immoscore-api-pppe.onrender.com";
 
-async function scorerAnnonce(ville, surface, prix, typeBien, dpe) {
-  try {
-    const params = new URLSearchParams({
-      ville, surface, prix, type_bien: typeBien, 
-      dpe: dpe || "E",  // E par défaut si non renseigné
-      uid: USER_ID || ""
-    });
-    const res = await fetch(`${API_URL}/score?${params}`);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (e) { return null; }
-}
-
 function couleurScore(score) {
   if (score >= 65) return "#27AE60";
   if (score >= 40) return "#E67E22";
@@ -240,6 +227,7 @@ function appliquerFiltre(scoreMin) {
 }
 async function scorerLoyer(ville, surface, loyer, typeBien) {
   try {
+    console.log("scorerLoyer:", ville, surface, loyer, typeBien);
     const params = new URLSearchParams({
       ville, surface, loyer, type_bien: typeBien
     });
@@ -248,42 +236,114 @@ async function scorerLoyer(ville, surface, loyer, typeBien) {
     return await res.json();
   } catch (e) { return null; }
 }
+async function scorerAnnonce(ville, surface, prix, typeBien, dpe) {
+  try {
+    const params = new URLSearchParams({
+      ville, surface, prix, type_bien: typeBien, 
+      dpe: dpe || "E",  // E par défaut si non renseigné
+      uid: USER_ID || ""
+    });
+    const res = await fetch(`${API_URL}/score?${params}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { return null; }
+}
+let analyseEnCours = false;
+
 async function analyserToutesLesCartes() {
-  const cartes = extraireCartes();
-  if (cartes.length === 0) return;
+  if (analyseEnCours) return;
 
-  // N'afficher la barre que si on a des annonces
-  creerBarreFiltrage();
-const result = estModeLocation()
-      ? await scorerLoyer(info.ville, info.surface, info.prix, info.typeBien)
-      : await scorerAnnonce(info.ville, info.surface, info.prix, info.typeBien, info.dpe);
-  for (const carte of cartes) {
-    if (carte.querySelector(".habitatscore-badge")) continue;
-    const info = extraireInfoCarte(carte);
-    if (!info.prix || !info.surface || !info.ville) continue;
+  analyseEnCours = true;
 
-    const badgeLoad = document.createElement("div");
-    badgeLoad.className = "habitatscore-badge";
-    badgeLoad.style.cssText = `
-      position: absolute; top: 8px; right: 8px;
-      background: #95a5a6; color: white;
-      border-radius: 6px; padding: 4px 8px;
-      font-size: 11px; font-weight: 600;
-      z-index: 999; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    `;
-    badgeLoad.innerText = "...";
-    const style = window.getComputedStyle(carte);
-    if (style.position === "static") carte.style.position = "relative";
-    carte.appendChild(badgeLoad);
+  try {
+    const cartes = extraireCartes();
+    if (cartes.length === 0) return;
 
-    const result = await scorerAnnonce(info.ville, info.surface, info.prix, info.typeBien, info.dpe);
-    badgeLoad.remove();
-    if (result && !result.erreur) ajouterBadge(carte, result);
-  }
+    creerBarreFiltrage();
 
-  const slider = document.getElementById("habitatscore-slider");
-  if (slider && parseInt(slider.value) > 0) {
-    appliquerFiltre(parseInt(slider.value));
+    const cartesAAnalyser = [];
+
+    // Préparer toutes les cartes
+    for (const carte of cartes) {
+      if (!(carte instanceof Element)) continue;
+
+      if (carte.querySelector(".habitatscore-badge")) continue;
+
+      const info = extraireInfoCarte(carte);
+
+      if (!info.prix || !info.surface || !info.ville) continue;
+
+      const badgeLoad = document.createElement("div");
+      badgeLoad.className = "habitatscore-badge";
+      badgeLoad.style.cssText = `
+        position: absolute; top: 8px; right: 8px;
+        background: #95a5a6; color: white;
+        border-radius: 6px; padding: 4px 8px;
+        font-size: 11px; font-weight: 600;
+        z-index: 999; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      `;
+      badgeLoad.innerText = "...";
+
+      const style = window.getComputedStyle(carte);
+      if (style.position === "static") {
+        carte.style.position = "relative";
+      }
+
+      carte.appendChild(badgeLoad);
+
+      cartesAAnalyser.push({
+        carte,
+        info,
+        badgeLoad
+      });
+    }
+
+    // Lancer tous les scores en parallèle
+    await Promise.all(
+      cartesAAnalyser.map(async ({ carte, info, badgeLoad }) => {
+        let result = null;
+
+        try {
+          if (estModeLocation()) {
+            result = await scorerLoyer(
+              info.ville,
+              info.surface,
+              info.prix,
+              info.typeBien
+            );
+          } else {
+            result = await scorerAnnonce(
+              info.ville,
+              info.surface,
+              info.prix,
+              info.typeBien,
+              info.dpe
+            );
+          }
+        } catch (e) {
+          console.error("Erreur scoring:", e);
+        }
+
+        if (badgeLoad.isConnected) {
+          badgeLoad.remove();
+        }
+
+        if (result && !result.erreur) {
+          ajouterBadge(carte, result);
+        }
+      })
+    );
+
+    const slider = document.getElementById("habitatscore-slider");
+
+    if (slider && parseInt(slider.value) > 0) {
+      appliquerFiltre(parseInt(slider.value));
+    }
+
+  } catch (e) {
+    console.error("Erreur analyserToutesLesCartes:", e);
+  } finally {
+    analyseEnCours = false;
   }
 }
 

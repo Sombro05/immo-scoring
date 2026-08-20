@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HabitatScore",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Analyse les annonces immobilières en temps réel",
   "permissions": ["activeTab", "storage"],
   "host_permissions": [
