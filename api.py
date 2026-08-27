@@ -49,7 +49,10 @@ async def calculer_score(
 ):
     row = trouver_ville(ville, type_bien)
     if row is None:
-        return {"erreur": f"Ville '{ville}' introuvable"}
+        return {
+            "erreur": f"Ville '{ville}' introuvable",
+            "message": "Données non disponibles pour cette ville."
+        }
 
     prix_m2_median  = float(row["prix_m2_median"])
     loyer_m2_estime = float(row["loyer_m2_estime"])
